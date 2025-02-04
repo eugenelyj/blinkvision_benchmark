@@ -7,7 +7,8 @@ from pathlib import Path
 from event_viz import event_to_rgb
 import hashlib
 
-TAG_VALUE = 25020223
+TAG_VALUE = 2502001 # full data
+TAG_VALUE_2 = 2502002 # sampled data
 
 vis_list = [
     "FlyingObjects/000039/700_800.flo",
@@ -117,7 +118,7 @@ def process_directory(input_dir, output_dir):
             basename = f'{start_ts}_{end_ts}'
 
             # read data
-            flow_data = np.load(flow_path).astype(np.float32)
+            flow_data = np.load(flow_path).astype(np.float32)[..., :2]
             height, width = flow_data.shape[:2]
 
             ground_truth_rel_path = os.path.join(rel_path, f'{basename}.flo')

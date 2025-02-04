@@ -4,7 +4,8 @@ import numpy as np
 from pathlib import Path
 import struct
 
-TAG_VALUE = 25020223
+TAG_VALUE = 2502001 # full data
+TAG_VALUE_2 = 2502002 # sampled data
 
 vis_list = [
     "FlyingObjects/000039/700_800.flo",
@@ -34,7 +35,6 @@ def read_flo_file(file_path, relative_path, gt_input):
         
         # Read flow data
         flow_data = np.fromfile(f, dtype=np.float32, count=width * height * 2)
-        flow_data = flow_data.reshape(height, width, 2)
         
         data = {
             'flow': flow_data,
@@ -62,7 +62,6 @@ def sample_and_save_flow(flow_path, sample_map_path, output_path, rel_path, gt_i
     # Read flow data
     width, height, data = read_flo_file(flow_path, rel_path, gt_input)
     flow_data = data['flow']
-    flow_data = flow_data.reshape(height, width, 2)
 
     contains_vis = data['contains_vis']
     if contains_vis:
@@ -72,10 +71,8 @@ def sample_and_save_flow(flow_path, sample_map_path, output_path, rel_path, gt_i
             rgb_data = data['rgb']
             event_data = data['event']
     else:
-        # Load sample map
+        flow_data = flow_data.reshape(height, width, 2)
         sample_map = load_sample_map(sample_map_path, height, width)
-        
-        # Sample the flow data
         sampled_flow = flow_data[sample_map].reshape(-1)
 
     # Prepare output data
@@ -85,9 +82,10 @@ def sample_and_save_flow(flow_path, sample_map_path, output_path, rel_path, gt_i
     # Write sampled data in the same format as C++ code
     with open(output_file, 'wb') as f:
         # Write header
-        np.array(TAG_VALUE).astype(np.int32).tofile(f)
+        np.array(TAG_VALUE_2).astype(np.int32).tofile(f)
         np.array(contains_vis).astype(np.int32).tofile(f)
-        np.array(len(sampled_flow)).astype(np.int32).tofile(f)
+        num_samples = int(len(sampled_flow) / 2)
+        np.array(num_samples).astype(np.int32).tofile(f)
         
         # Write sampled flow data
         sampled_flow.tofile(f)
