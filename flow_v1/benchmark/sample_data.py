@@ -63,17 +63,14 @@ def sample_and_save_flow(flow_path, sample_map_path, output_path, rel_path, gt_i
     width, height, data = read_flo_file(flow_path, rel_path, gt_input)
     flow_data = data['flow']
 
-    contains_vis = data['contains_vis']
-    if contains_vis:
-        sampled_flow = flow_data
+    flow_data = flow_data.reshape(height, width, 2)
+    sample_map = load_sample_map(sample_map_path, height, width)
+    sampled_flow = flow_data[sample_map].reshape(-1)
 
-        if gt_input:
-            rgb_data = data['rgb']
-            event_data = data['event']
-    else:
-        flow_data = flow_data.reshape(height, width, 2)
-        sample_map = load_sample_map(sample_map_path, height, width)
-        sampled_flow = flow_data[sample_map].reshape(-1)
+    contains_vis = data['contains_vis']
+    if contains_vis and gt_input:
+        rgb_data = data['rgb']
+        event_data = data['event']
 
     # Prepare output data
     output_file = Path(output_path)

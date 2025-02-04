@@ -138,13 +138,15 @@ def process_directory(input_dir, output_dir):
                 additional_data = {}
                 additional_data['rgb'] = rgb_img.astype(np.uint8)
                 additional_data['event'] = event_img.astype(np.uint8)
+
+                sample_map = np.ones((height, width), dtype=bool)
             else:
                 # Generate sample map
                 sample_map = generate_sample_map(width, height)
             
-                # Create output directory structure
-                sample_file = sample_maps_dir / rel_path / f'{basename}.bin'
-                write_sample_map(sample_file, sample_map)
+            # Create output directory structure
+            sample_file = sample_maps_dir / rel_path / f'{basename}.bin'
+            write_sample_map(sample_file, sample_map)
 
             ground_truth_file = ground_truth_dir / rel_path / f'{basename}.flo'
             write_ground_truth(ground_truth_file, flow_data, additional_data)
