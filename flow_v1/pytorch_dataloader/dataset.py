@@ -62,7 +62,7 @@ class BlinkFlow(Dataset):
         flow_32bit = np.load(flowfile)
         # valid flag labels forward-backward checking
         flow, valid2D = flow_32bit[:,:,:2], flow_32bit[:,:,2]
-        # we evaluate on all pixels
+        # we train on all pixels
         valid2D = np.ones_like(valid2D)
         flow = np.transpose(flow, [2, 0, 1])
         return flow, valid2D
