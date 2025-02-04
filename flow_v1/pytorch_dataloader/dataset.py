@@ -144,17 +144,17 @@ def event2voxel(batch, num_bins=15, height=480, width=640):
     event_old = batch['event_volume_old'].cuda()
     event_new = batch['event_volume_new'].cuda()
     image1 = voxel_grid.convert({
-        'p': event_old[:,0],
-        't': event_old[:,1],
-        'x': event_old[:,2],
-        'y': event_old[:,3],
+        'x': event_old[:,0],
+        'y': event_old[:,1],
+        't': event_old[:,2],
+        'p': event_old[:,3],
         'batch_index': event_old[:,4].to(torch.long)
     })
     image2 = voxel_grid.convert({
-        'p': event_new[:,0],
-        't': event_new[:,1],
-        'x': event_new[:,2],
-        'y': event_new[:,3],
+        'x': event_new[:,0],
+        'y': event_new[:,1],
+        't': event_new[:,2],
+        'p': event_new[:,3],
         'batch_index': event_new[:,4].to(torch.long)
     })
     return image1, image2
