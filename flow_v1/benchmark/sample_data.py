@@ -2,6 +2,7 @@ import os
 import tqdm
 import numpy as np
 from pathlib import Path
+import shutil
 import struct
 
 TAG_VALUE = 2502001 # full data
@@ -130,6 +131,11 @@ def process_directory(flow_dir, sample_maps_dir, output_dir, gt_input):
         
         # Process the file
         sample_and_save_flow(flo_path, sample_map_path, output_file, str(rel_path), gt_input)
+
+    # if not gt_input, zip the output directory
+    if not gt_input:
+        zip_path = output_path.with_suffix('.zip')
+        shutil.make_archive(zip_path, 'zip', output_path)
 
 if __name__ == "__main__":
     import argparse

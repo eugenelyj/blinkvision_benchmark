@@ -253,6 +253,14 @@ def compute_errors(flow_gt, pred, valid):
 
     return metrics
 
+def get_deepest_single_subfolder(path):
+    """Recursively finds the deepest directory that contains only one subfolder."""
+    current_path = path
+    while os.path.isdir(current_path) and len(os.listdir(current_path)) == 1:
+        subfolder = os.listdir(current_path)[0]
+        current_path = os.path.join(current_path, subfolder)
+    return current_path
+
 if __name__ == '__main__':
     # argsparser
     import argparse
@@ -278,6 +286,19 @@ if __name__ == '__main__':
         os.system(f'unzip -o {zip_path} -d {uncompressed_path}')
         pred_path = uncompressed_path
 
+    # Replace the existing single-level check with the recursive function
+    if os.path.isdir(pred_path):
+        pred_path = get_deepest_single_subfolder(pred_path)
+
+    else:
+        json_data = {
+            'code': 'FAILURE',
+            'error_msg': 'output is not a folder'
+        }
+        with open(f'{args.output_path}/result.json', 'w') as f:
+            json.dump(json_data, f, indent=4)
+        exit()
+        
     all_pixel_row = [['']+metric_name]
 
     print(f'Evaluating ...')
