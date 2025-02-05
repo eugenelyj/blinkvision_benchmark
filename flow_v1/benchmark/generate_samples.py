@@ -78,7 +78,13 @@ def write_sample_map(output_file, sample_map):
 def load_rgb_img(possible_rgb_path):
     if os.path.exists(possible_rgb_path):
         rgb_img = np.load(possible_rgb_path)
-        rgb_img = (rgb_img * 255).astype(np.uint8)
+
+        if 'anima' not in possible_rgb_path:
+            rgb_img = (rgb_img * 255).astype(np.uint8)
+
+        if 'Blender' in possible_rgb_path:
+            rgb_img = cv2.cvtColor(rgb_img, cv2.COLOR_BGR2RGB)
+
         return rgb_img
     else:
         try:
