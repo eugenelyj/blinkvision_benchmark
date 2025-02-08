@@ -134,7 +134,7 @@ def process_directory(flow_dir, sample_maps_dir, output_dir, gt_input):
 
     # if not gt_input, zip the output directory
     if not gt_input:
-        zip_path = output_path.with_suffix('.zip')
+        zip_path = output_path
         shutil.make_archive(zip_path, 'zip', output_path)
 
 if __name__ == "__main__":
