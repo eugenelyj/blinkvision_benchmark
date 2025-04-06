@@ -12,7 +12,8 @@ import tqdm
 from torch.utils.data import DataLoader
 
 # Local imports
-from dataset import collate_event, BlinkFlow, event2voxel
+sys.path.append(str(Path(__file__).parent.parent))
+from pytorch_dataloader.dataset import collate_event, BlinkFlow, event2voxel
 
 TAG_VALUE = 2502001 # full data
 
