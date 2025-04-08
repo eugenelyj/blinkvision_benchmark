@@ -21,3 +21,25 @@ The files under the `blinkflow_v1` directory:
 # BlinkVision
 
 The related scripts are in the `blinkvision_v1` folder.
+
+
+# Citation
+
+If you find this code useful for your research, please use the following BibTeX entry.
+
+```bibtex
+@inproceedings{blinkflow_iros2023,
+  title={BlinkFlow: A Dataset to Push the Limits of Event-based Optical Flow Estimation},
+  author={Yijin Li, Zhaoyang Huang, Shuo Chen, Xiaoyu Shi, Hongsheng Li, Hujun Bao, Zhaopeng Cui, Guofeng Zhang},
+  booktitle={IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  month = {October},
+  year = {2023},
+}
+
+@inproceedings{blinkvision_eccv2024,
+  title={BlinkVision: A Benchmark for Optical Flow, Scene Flow and Point Tracking Estimation using RGB Frames and Events},
+  author={Yijin Li, Yichen Shen, Zhaoyang Huang, Shuo Chen, Weikang Bian, Xiaoyu Shi, Fu-Yun Wang, Keqiang Sun, Hujun Bao, Zhaopeng Cui, Guofeng Zhang, Hongsheng Li},
+  booktitle={European Conference on Computer Vision (ECCV)},
+  year={2024}
+}
+```
