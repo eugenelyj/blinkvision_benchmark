@@ -13,6 +13,21 @@ TAG_VALUE = 2502001 # full data
 TAG_VALUE_2 = 2502002 # sampled data
 
 
+def get_corrent_path(path):
+    while True:
+        # list dir and filter out dir
+        list_content = os.listdir(path)
+        list_content = [item for item in list_content if os.path.isdir(os.path.join(path, item))]
+        if len(list_content) < 1:
+            return None
+        elif ('clean' in list_content and 'final' in list_content) or 'event' in list_content:
+            return path
+        elif len(list_content) == 1:
+            path = os.path.join(path, list_content[0])
+        else:
+            return None
+
+
 def make_colorwheel():
     """
     Generates a color wheel for optical flow visualization as presented in:
@@ -253,14 +268,6 @@ def compute_errors(flow_gt, pred, valid):
 
     return metrics
 
-def get_deepest_single_subfolder(path):
-    """Recursively finds the deepest directory that contains only one subfolder."""
-    current_path = path
-    while os.path.isdir(current_path) and len(os.listdir(current_path)) == 1:
-        subfolder = os.listdir(current_path)[0]
-        current_path = os.path.join(current_path, subfolder)
-    return current_path
-
 if __name__ == '__main__':
     # argsparser
     import argparse
@@ -293,9 +300,16 @@ if __name__ == '__main__':
         os.system(f'unzip -o {zip_path} -d {uncompressed_path}')
         pred_path = uncompressed_path
 
-    # Replace the existing single-level check with the recursive function
     if os.path.isdir(pred_path):
-        pred_path = get_deepest_single_subfolder(pred_path)
+        pred_path = get_corrent_path(pred_path)
+        if pred_path is None:
+            json_data = {
+                'code': 'FAILURE',
+                'error_msg': 'Invalid zip file'
+            }
+            with open(f'{args.output_path}/result.json', 'w') as f:
+                json.dump(json_data, f, indent=4)
+            exit()
 
     else:
         json_data = {
@@ -306,76 +320,114 @@ if __name__ == '__main__':
             json.dump(json_data, f, indent=4)
         exit()
         
-    all_pixel_row = [['']+metric_name]
-
     print(f'Evaluating ...')
     os.system(f'mkdir -p {args.output_path}')
 
-    for scene in os.listdir(gt_path):
-        seq_metrics = RunningAverageDict()
-        for seq in os.listdir(os.path.join(gt_path, scene)):
-            file_list = os.listdir(os.path.join(gt_path, scene, seq))
-            for file_name in file_list:
-                pred_file_path = os.path.join(pred_path, scene, seq, file_name)
-                if not os.path.exists(pred_file_path):
-                    status_code = 'FAILURE'
-                    error_msg = f'File {scene}/{seq}/{file_name} not found in the zip file'
+    if 'clean' in os.listdir(pred_path) and 'final' in os.listdir(pred_path):
+        pattern_list = ['clean', 'final']
+    elif 'event' in os.listdir(pred_path):
+        pattern_list = ['event']
+    else:
+        json_data = {
+            'code': 'FAILURE',
+            'error_msg': 'Invalid zip file'
+        }
+        with open(f'{args.output_path}/result.json', 'w') as f:
+            json.dump(json_data, f, indent=4)
+        exit()
+
+    all_pixel_row = [['']+metric_name]
+
+    for pattern in pattern_list:
+        os.system(f'mkdir -p {args.output_path}/{pattern}')
+        for scene in os.listdir(gt_path):
+            seq_metrics = RunningAverageDict()
+            for seq in os.listdir(os.path.join(gt_path, scene)):
+                file_list = os.listdir(os.path.join(gt_path, scene, seq))
+                for file_name in file_list:
+                    pred_file_path = os.path.join(pred_path, pattern, scene, seq, file_name)
+                    if not os.path.exists(pred_file_path):
+                        status_code = 'FAILURE'
+                        error_msg = f'File {scene}/{seq}/{file_name} not found in the zip file'
+                        break
+                    gt_file_path = os.path.join(gt_path, scene, seq, file_name)
+                    try:
+                        pred_data, _ = readFlow(pred_file_path, is_gt=False)
+                        gt_data, contains_vis = readFlow(gt_file_path, is_gt=True)
+                    except Exception as e:
+                        status_code = 'FAILURE'
+                        error_msg = str(e)
+                        break
+                    pred_flow = pred_data['flow']
+                    gt_flow = gt_data['flow'][:, :2]
+
+                    # the valid mask means non-occluded pixels, we eval on all pixels
+                    valid = torch.ones([gt_flow.shape[0]], dtype=torch.bool)
+                    error_dict = compute_errors(torch.from_numpy(gt_flow), torch.from_numpy(pred_flow), valid)
+                    all_epe = error_dict['epe'] if 'epe' in error_dict else 0
+                    all_out = error_dict['out'] if 'out' in error_dict else 0
+
+                    image1_index, image2_index = file_name.split('.')[0].split('_')
+                    image1_index = int(image1_index)
+                    image2_index = int(image2_index)
+                    stride = image2_index - image1_index
+                    renamed_error_dict = {}
+                    for key, value in error_dict.items():
+                        renamed_key = f'st{stride}-{key}'
+                        renamed_error_dict[renamed_key] = value
+
+                    seq_metrics.update(renamed_error_dict)
+
+                    if contains_vis:
+                        pred_flow = np.reshape(pred_flow, [480, 640, 2])
+                        gt_flow = np.reshape(gt_flow, [480, 640, 2])
+                        error_map = visualize_error_map(pred_flow, gt_flow)
+                        flow_vis = flow_to_image(pred_flow)
+                        os.system(f'mkdir -p {args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}')
+                        Image.fromarray(gt_data['rgb']).save(f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}/rgb.png')
+                        Image.fromarray(gt_data['event']).save(f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}/event.png')
+                        Image.fromarray(flow_vis).save(f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}/flow.png')
+                        Image.fromarray(error_map).save(f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}/error.png')
+                        with open(f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}/err.csv', 'w', newline='') as csvfile:
+                            err_data = [['EPE-All', 'Out-All'],
+                                        [f'{all_epe:.3f}', f'{all_out:.3f}']]
+                            csvwriter = csv.writer(csvfile)
+                            csvwriter.writerows(err_data)
+
+                if status_code == 'FAILURE':
                     break
-                gt_file_path = os.path.join(gt_path, scene, seq, file_name)
-                try:
-                    pred_data, _ = readFlow(pred_file_path, is_gt=False)
-                    gt_data, contains_vis = readFlow(gt_file_path, is_gt=True)
-                except Exception as e:
-                    status_code = 'FAILURE'
-                    error_msg = str(e)
-                    break
-                pred_flow = pred_data['flow']
-                gt_flow = gt_data['flow'][:, :2]
-
-                # the valid mask means non-occluded pixels, we eval on all pixels
-                valid = torch.ones([gt_flow.shape[0]], dtype=torch.bool)
-                error_dict = compute_errors(torch.from_numpy(gt_flow), torch.from_numpy(pred_flow), valid)
-                all_epe = error_dict['epe'] if 'epe' in error_dict else 0
-                all_out = error_dict['out'] if 'out' in error_dict else 0
-
-                image1_index, image2_index = file_name.split('_')
-                image1_index = int(image1_index)
-                image2_index = int(image2_index)
-                stride = image2_index - image1_index
-                renamed_error_dict = {}
-                for key, value in error_dict.items():
-                    renamed_key = f'st{stride}-{key}'
-                    renamed_error_dict[renamed_key] = value
-
-                seq_metrics.update(renamed_error_dict)
-
-                if contains_vis:
-                    pred_flow = np.reshape(pred_flow, [480, 640, 2])
-                    gt_flow = np.reshape(gt_flow, [480, 640, 2])
-                    error_map = visualize_error_map(pred_flow, gt_flow)
-                    flow_vis = flow_to_image(pred_flow)
-                    os.system(f'mkdir -p {args.output_path}/{scene}_{seq}_{file_name[:-4]}')
-                    Image.fromarray(gt_data['rgb']).save(f'{args.output_path}/{scene}_{seq}_{file_name[:-4]}/rgb.png')
-                    Image.fromarray(gt_data['event']).save(f'{args.output_path}/{scene}_{seq}_{file_name[:-4]}/event.png')
-                    Image.fromarray(flow_vis).save(f'{args.output_path}/{scene}_{seq}_{file_name[:-4]}/flow.png')
-                    Image.fromarray(error_map).save(f'{args.output_path}/{scene}_{seq}_{file_name[:-4]}/error.png')
-                    with open(f'{args.output_path}/{scene}_{seq}_{file_name[:-4]}/err.csv', 'w', newline='') as csvfile:
-                        err_data = [['EPE-All', 'Out-All'],
-                                    [f'{all_epe:.3f}', f'{all_out:.3f}']]
-                        csvwriter = csv.writer(csvfile)
-                        csvwriter.writerows(err_data)
 
             if status_code == 'FAILURE':
                 break
 
-        if status_code == 'FAILURE':
-            break
+            seq_metrics = {k: round(v, 3) for k, v in seq_metrics.get_value().items()}
 
-        seq_metrics = {k: round(v, 3) for k, v in seq_metrics.get_value().items()}
+            all_pixel_row.append([scene])
+            for metric in metric_name:
+                all_pixel_row[-1].append(seq_metrics[metric])
 
-        all_pixel_row.append([scene])
-        for metric in metric_name:
-            all_pixel_row[-1].append(seq_metrics[metric])
+        # Writing to csv file
+        with open(f'{args.output_path}/{pattern}/all.csv', 'w', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerows(all_pixel_row)
+
+        avg_row = [[''] + metric_name]
+        avg_row += [[''] + [0] * len(metric_name)]
+        for i in range(len(metric_name)):
+            avg_metric = 0
+            for j in range(1, len(all_pixel_row)):
+                avg_metric += all_pixel_row[j][i+1]
+            avg_metric /= len(all_pixel_row) - 1
+            avg_row[1][i+1] = avg_metric
+        
+        with open(f'{args.output_path}/{pattern}/avg.csv', 'w', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerows(avg_row)
+
+    if len(pattern_list) == 1 and pattern_list[0] == 'event':
+        os.system(f'cp -r {args.output_path}/event/ {args.output_path}/clean/')
+        os.system(f'cp -r {args.output_path}/event/ {args.output_path}/final/')
+        os.system(f'rm -rf {args.output_path}/event')
 
     # write json
     json_data = {
@@ -387,9 +439,4 @@ if __name__ == '__main__':
 
     if status_code == 'FAILURE':
         exit()
-
-    # Writing to csv file
-    with open(f'{args.output_path}/all.csv', 'w', newline='') as csvfile:
-        csvwriter = csv.writer(csvfile)
-        csvwriter.writerows(all_pixel_row)
 
