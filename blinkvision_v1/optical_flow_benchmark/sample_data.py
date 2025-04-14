@@ -8,8 +8,14 @@ import struct
 TAG_VALUE = 2502001 # full data
 TAG_VALUE_2 = 2502002 # sampled data
 
-vis_list = [
-]
+vis_list = []
+this_file_path = os.path.abspath(__file__)
+this_file_dir = os.path.dirname(this_file_path)
+vis_list_path = os.path.join(this_file_dir, 'vis_list.txt')
+if os.path.exists(vis_list_path):
+    with open(vis_list_path, 'r') as f:
+        for line in f:
+            vis_list.append(line.strip())
 
 def read_flo_file(file_path, relative_path, gt_input):
     """Read the flow file format used in the C++ code."""

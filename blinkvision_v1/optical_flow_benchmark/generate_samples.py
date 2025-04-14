@@ -2,6 +2,7 @@ import os
 import cv2
 import h5py
 import yaml
+import random
 import tqdm
 import numpy as np
 from pathlib import Path
@@ -11,15 +12,20 @@ import hashlib
 TAG_VALUE = 2502001 # full data
 TAG_VALUE_2 = 2502002 # sampled data
 
-vis_list = [
-]
+vis_list = []
+this_file_path = os.path.abspath(__file__)
+this_file_dir = os.path.dirname(this_file_path)
+vis_list_path = os.path.join(this_file_dir, 'vis_list.txt')
+if os.path.exists(vis_list_path):
+    with open(vis_list_path, 'r') as f:
+        for line in f:
+            vis_list.append(line.strip())
 
-def generate_sample_map(width, height):
+def generate_sample_map(width, height, grid_size=4):
     """Generate a random sample map for a given size using efficient grid sampling."""
     sample_map = np.zeros((height, width), dtype=bool)
     
     # Calculate grid dimensions
-    grid_size = 4
     grid_h = (height + grid_size - 1) // grid_size  # Ceiling division for edge cases
     grid_w = (width + grid_size - 1) // grid_size
     
@@ -64,25 +70,10 @@ def write_sample_map(output_file, sample_map):
     packed_array = np.packbits(sample_map)
     packed_array.tofile(output_file)
 
-def load_rgb_img(possible_rgb_path):
-    if os.path.exists(possible_rgb_path):
-        rgb_img = np.load(possible_rgb_path)
-
-        if 'anima' not in possible_rgb_path:
-            rgb_img = (rgb_img * 255).astype(np.uint8)
-
-        if 'Blender' in possible_rgb_path:
-            rgb_img = cv2.cvtColor(rgb_img, cv2.COLOR_BGR2RGB)
-
-        return rgb_img
-    else:
-        try:
-            rgb_path = possible_rgb_path.replace('npy', 'png')
-            rgb_img = cv2.imread(rgb_path)
-            rgb_img = cv2.cvtColor(rgb_img, cv2.COLOR_BGR2RGB)
-            return rgb_img
-        except:
-            raise ValueError(f"No RGB image found at {possible_rgb_path} or {rgb_path}")
+def load_rgb_img(rgb_path):
+    rgb_img = cv2.imread(rgb_path)
+    rgb_img = cv2.cvtColor(rgb_img, cv2.COLOR_BGR2RGB)
+    return rgb_img
 
 
 def process_directory(mapping_file, input_dir, output_dir):
@@ -113,11 +104,18 @@ def process_directory(mapping_file, input_dir, output_dir):
 
 
     data_list = []
+    global vis_list
+    if len(vis_list) == 0:
+        generate_vis_list = True
+    else:
+        generate_vis_list = False
+
     for sub_path in seq_list:
         flow_dir = os.path.join(input_path, sub_path.replace('outdoor/', 'outdoor_gt/'), 'forward_flow_custom_stride')
         clean_dir = os.path.join(input_path, sub_path, 'clean_uint8')
         event_path = os.path.join(input_path, sub_path.replace('outdoor/', 'outdoor_event/'), 'events_left/events.h5')
         # config_path = os.path.join(input_path, sub_path, 'config.yaml')
+        candidate_list = []
         for filename in os.listdir(flow_dir):
             if filename.endswith('.npz'):
                 basename = filename.replace('.npz', '')
@@ -129,6 +127,7 @@ def process_directory(mapping_file, input_dir, output_dir):
                 # check if all path exists
                 if os.path.exists(flow_path) and os.path.exists(image_path) and os.path.exists(event_path):
                     data_list.append([flow_path, image1_index, image2_index, image_path, event_path, None])
+                    candidate_list.append(flow_path)
                 else:
                     if not os.path.exists(flow_path):
                         print(f'Missing files: {flow_path}')
@@ -136,6 +135,18 @@ def process_directory(mapping_file, input_dir, output_dir):
                         print(f'Missing files: {image_path}')
                     if not os.path.exists(event_path):
                         print(f'Missing files: {event_path}')
+        
+        # random sample one from candidate_list
+        if generate_vis_list and len(candidate_list) > 0:
+            vis_list.append(candidate_list[np.random.randint(0, len(candidate_list))])
+    
+    if generate_vis_list:
+        # random sample 50 from vis_list
+        vis_list = random.sample(vis_list, 50)
+        with open('vis.txt', 'w') as f:
+            for vis in vis_list:
+                vis = vis.replace(str(input_path)+'/', '').replace('/forward_flow_custom_stride', '').replace('.npz', '.flo')
+                f.write(f'{vis}\n')
 
     for data in tqdm.tqdm(data_list, total=len(data_list), desc="Processing samples"):
         flow_path, image1_index, image2_index, image_path, event_path, config_path = data
@@ -176,7 +187,7 @@ def process_directory(mapping_file, input_dir, output_dir):
             sample_map = np.ones((height, width), dtype=bool)
         else:
             # Generate sample map
-            sample_map = generate_sample_map(width, height)
+            sample_map = generate_sample_map(width, height, grid_size=6)
 
         # set invalid flow to False
         sample_map = np.where(valid_mask == 0, False, sample_map)
