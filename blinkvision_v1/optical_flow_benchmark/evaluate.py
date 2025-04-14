@@ -6,6 +6,8 @@ import csv
 import cv2
 import json
 from PIL import Image
+import hashlib
+import time
 
 
 MAX_FLOW = 400
@@ -13,11 +15,15 @@ TAG_VALUE = 2502001 # full data
 TAG_VALUE_2 = 2502002 # sampled data
 
 
-def get_corrent_path(path):
+def get_correct_path(path):
     while True:
+        if not os.path.isdir(path):
+            return None
         # list dir and filter out dir
         list_content = os.listdir(path)
         list_content = [item for item in list_content if os.path.isdir(os.path.join(path, item))]
+        # ignore __MACOSX and .*
+        list_content = [item for item in list_content if item != '__MACOSX' and not item.startswith('.')]
         if len(list_content) < 1:
             return None
         elif ('clean' in list_content and 'final' in list_content) or 'event' in list_content:
@@ -296,12 +302,18 @@ if __name__ == '__main__':
 
     if args.is_zip:
         zip_path = args.pred_path
-        uncompressed_path = zip_path.rsplit('.', 1)[0]
+        # new a random hash name
+        def generate_random_hash(length=32):
+            current_time = str(time.time()).encode('utf-8')
+            return hashlib.sha256(current_time).hexdigest()[:length]
+
+        random_hash = generate_random_hash()
+        uncompressed_path = os.path.join(args.output_path, random_hash)
         os.system(f'unzip -o {zip_path} -d {uncompressed_path}')
         pred_path = uncompressed_path
 
     if os.path.isdir(pred_path):
-        pred_path = get_corrent_path(pred_path)
+        pred_path = get_correct_path(pred_path)
         if pred_path is None:
             json_data = {
                 'code': 'FAILURE',

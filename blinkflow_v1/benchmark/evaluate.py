@@ -1,4 +1,6 @@
 import numpy as np
+import hashlib
+import time
 import torch
 import os
 import math
@@ -256,9 +258,17 @@ def compute_errors(flow_gt, pred, valid):
 def get_deepest_single_subfolder(path):
     """Recursively finds the deepest directory that contains only one subfolder."""
     current_path = path
-    while os.path.isdir(current_path) and len(os.listdir(current_path)) == 1:
-        subfolder = os.listdir(current_path)[0]
-        current_path = os.path.join(current_path, subfolder)
+    # while os.path.isdir(current_path) and len(os.listdir(current_path)) == 1:
+    while True:
+        if not os.path.isdir(current_path):
+            return None
+        list_content = os.listdir(current_path)
+        # ignore __MACOSX and .*
+        list_content = [item for item in list_content if item != '__MACOSX' and not item.startswith('.')]
+        if len(list_content) == 1:
+            current_path = os.path.join(current_path, list_content[0])
+        else:
+            break
     return current_path
 
 if __name__ == '__main__':
@@ -282,14 +292,27 @@ if __name__ == '__main__':
 
     if args.is_zip:
         zip_path = args.pred_path
-        uncompressed_path = zip_path.rsplit('.', 1)[0]
+        # new a random hash name
+        def generate_random_hash(length=32):
+            current_time = str(time.time()).encode('utf-8')
+            return hashlib.sha256(current_time).hexdigest()[:length]
+
+        random_hash = generate_random_hash()
+        uncompressed_path = os.path.join(args.output_path, random_hash)
         os.system(f'unzip -o {zip_path} -d {uncompressed_path}')
         pred_path = uncompressed_path
 
     # Replace the existing single-level check with the recursive function
     if os.path.isdir(pred_path):
         pred_path = get_deepest_single_subfolder(pred_path)
-
+        if pred_path is None:
+            json_data = {
+                'code': 'FAILURE',
+                'error_msg': 'Invalid zip file'
+            }
+            with open(f'{args.output_path}/result.json', 'w') as f:
+                json.dump(json_data, f, indent=4)
+            exit()
     else:
         json_data = {
             'code': 'FAILURE',
