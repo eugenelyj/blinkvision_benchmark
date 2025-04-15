@@ -59,7 +59,8 @@ def write_ground_truth(output_file, flow_data, additional_data):
         np.array(height).astype(np.int32).tofile(f)
         flow_data.reshape(-1).tofile(f)
         if additional_data:
-            additional_data['rgb'].reshape(-1).tofile(f)
+            additional_data['clean'].reshape(-1).tofile(f)
+            additional_data['final'].reshape(-1).tofile(f)
             additional_data['event'].reshape(-1).tofile(f)
 
 
@@ -179,9 +180,11 @@ def process_directory(mapping_file, input_dir, output_dir):
             y = event_stream['y'][start_idx:end_idx]
             t = event_stream['t'][start_idx:end_idx]
             event_img = event_to_rgb(_x=x, _y=y, pol=p, t=t, H=height, W=width)
-            rgb_img = load_rgb_img(image_path)
+            clean_image = load_rgb_img(image_path)
+            final_image = load_rgb_img(image_path.replace('clean_uint8', 'final_uint8'))
             additional_data = {}
-            additional_data['rgb'] = rgb_img.astype(np.uint8)
+            additional_data['clean'] = clean_image.astype(np.uint8)
+            additional_data['final'] = final_image.astype(np.uint8)
             additional_data['event'] = event_img.astype(np.uint8)
 
             sample_map = np.ones((height, width), dtype=bool)

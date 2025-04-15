@@ -42,25 +42,17 @@ def event_to_rgb(_x, _y, pol, t, H, W):
     mask[y[mask1],x[mask1]] = pol[mask1]
     t_map[y[mask1],x[mask1]] = t[mask1]  # Store timestamps
     
-    # Scale color intensity based on timestamp
     img[mask==-1] = [255,255,255]  # Background remains white
     
-    # For negative polarity (red), scale intensity with timestamp
+    # Scale color intensity based on timestamp
     neg_mask = (mask == 0)
-    img[neg_mask] = [
-        255,  # R
-        0,    # G
-        0     # B
-    ]
-    img[neg_mask] = img[neg_mask] * (0.3 + 0.7 * t_map[neg_mask, None])  # Darker to brighter
+    base_red = [255, 0, 0]  # Base red color
+    intensity = 0.1 + 0.7 * t_map[neg_mask, None]
+    img[neg_mask] = np.array(base_red) * intensity + 255 * (1 - intensity)
     
-    # For positive polarity (blue), scale intensity with timestamp
     pos_mask = (mask == 1)
-    img[pos_mask] = [
-        0,    # R
-        0,    # G
-        255   # B
-    ]
-    img[pos_mask] = img[pos_mask] * (0.3 + 0.7 * t_map[pos_mask, None])  # Darker to brighter
+    base_blue = [0, 0, 255]  # Base blue color
+    intensity = 0.1 + 0.7 * t_map[pos_mask, None]
+    img[pos_mask] = np.array(base_blue) * intensity + 255 * (1 - intensity)
     
     return img

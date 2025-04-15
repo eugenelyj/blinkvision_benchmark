@@ -154,7 +154,8 @@ def flow_to_image(flow_uv, clip_flow=None, convert_to_bgr=False, return_rad_max=
 
 def visualize_error_map(flow_pred, flow_gt):
     error_map = np.linalg.norm(flow_pred - flow_gt, axis=-1)
-    error_map = error_map / np.max(error_map)
+    if np.max(error_map) > 0:
+        error_map = error_map / np.max(error_map)
     error_map = (error_map * 255).astype(np.uint8)
     error_map = np.repeat(error_map[..., None], 3, axis=-1)
 
@@ -210,9 +211,13 @@ def readFlow(fn, is_gt=False):
         }
 
         if contains_vis and is_gt:
-            rgb_image = np.fromfile(f, np.uint8, count=3*int(num_samples))
+            sample_map = np.fromfile(f, np.bool_, count=int(num_samples))
+            clean_image = np.fromfile(f, np.uint8, count=3*int(num_samples))
+            final_image = np.fromfile(f, np.uint8, count=3*int(num_samples))
             event_image = np.fromfile(f, np.uint8, count=3*int(num_samples))
-            data_dict['rgb'] = np.reshape(rgb_image, [480, 640, 3])
+            data_dict['sample_map'] = np.reshape(sample_map, [480, 640])
+            data_dict['clean'] = np.reshape(clean_image, [480, 640, 3])
+            data_dict['final'] = np.reshape(final_image, [480, 640, 3])
             data_dict['event'] = np.reshape(event_image, [480, 640, 3])
 
         return data_dict, bool(contains_vis)
@@ -283,6 +288,9 @@ if __name__ == '__main__':
     parser.add_argument('--output_path', type=str, help='path to save cvv/jpg')
     parser.add_argument('--is_zip', action='store_true')
     args = parser.parse_args()
+
+    print(f'Evaluating ...')
+    os.system(f'mkdir -p {args.output_path}')
                         
     row_data = []
     metric_name = ['st1-epe', 'st2-epe', 'st4-epe', 'st8-epe',
@@ -332,9 +340,6 @@ if __name__ == '__main__':
             json.dump(json_data, f, indent=4)
         exit()
         
-    print(f'Evaluating ...')
-    os.system(f'mkdir -p {args.output_path}')
-
     if 'clean' in os.listdir(pred_path) and 'final' in os.listdir(pred_path):
         pattern_list = ['clean', 'final']
     elif 'event' in os.listdir(pred_path):
@@ -374,7 +379,11 @@ if __name__ == '__main__':
                     gt_flow = gt_data['flow'][:, :2]
 
                     # the valid mask means non-occluded pixels, we eval on all pixels
-                    valid = torch.ones([gt_flow.shape[0]], dtype=torch.bool)
+                    if 'sample_map' in gt_data:
+                        sample_map_flat = gt_data['sample_map'].reshape(-1)
+                        valid = torch.from_numpy(sample_map_flat).bool()
+                    else:
+                        valid = torch.ones([gt_flow.shape[0]], dtype=torch.bool)
                     error_dict = compute_errors(torch.from_numpy(gt_flow), torch.from_numpy(pred_flow), valid)
                     all_epe = error_dict['epe'] if 'epe' in error_dict else 0
                     all_out = error_dict['out'] if 'out' in error_dict else 0
@@ -395,12 +404,19 @@ if __name__ == '__main__':
                         gt_flow = np.reshape(gt_flow, [480, 640, 2])
                         error_map = visualize_error_map(pred_flow, gt_flow)
                         flow_vis = flow_to_image(pred_flow)
-                        os.system(f'mkdir -p {args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}')
-                        Image.fromarray(gt_data['rgb']).save(f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}/rgb.png')
-                        Image.fromarray(gt_data['event']).save(f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}/event.png')
-                        Image.fromarray(flow_vis).save(f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}/flow.png')
-                        Image.fromarray(error_map).save(f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}/error.png')
-                        with open(f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}/err.csv', 'w', newline='') as csvfile:
+                        sample_map = gt_data['sample_map']
+                        flow_vis[~sample_map] = 0
+                        error_map[~sample_map] = 0
+                        folder_name = f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}'
+                        os.system(f'mkdir -p {folder_name}')
+                        if pattern == 'clean' or pattern == 'event':
+                            Image.fromarray(gt_data['clean']).save(f'{folder_name}/clean.png')
+                        else:
+                            Image.fromarray(gt_data['final']).save(f'{folder_name}/final.png')
+                        Image.fromarray(gt_data['event']).save(f'{folder_name}/event.png')
+                        Image.fromarray(flow_vis).save(f'{folder_name}/flow.png')
+                        Image.fromarray(error_map).save(f'{folder_name}/error.png')
+                        with open(f'{folder_name}/err.csv', 'w', newline='') as csvfile:
                             err_data = [['EPE-All', 'Out-All'],
                                         [f'{all_epe:.3f}', f'{all_out:.3f}']]
                             csvwriter = csv.writer(csvfile)

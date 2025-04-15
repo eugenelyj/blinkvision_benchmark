@@ -36,15 +36,18 @@ def read_flo_file(file_path, relative_path, gt_input):
         }
 
         contains_vis = False
-        if relative_path in vis_list:
+        flow_relative_path = relative_path.split('.')[0] + '.flo'
+        if flow_relative_path in vis_list:
             contains_vis = True
 
             if gt_input:
-                rgb_data = np.fromfile(f, dtype=np.uint8, count=width * height * 3)
+                clean_data = np.fromfile(f, dtype=np.uint8, count=width * height * 3)
+                final_data = np.fromfile(f, dtype=np.uint8, count=width * height * 3)
                 event_data = np.fromfile(f, dtype=np.uint8, count=width * height * 3)
-                
+
                 data.update({
-                    'rgb': rgb_data,
+                    'clean': clean_data,
+                    'final': final_data,
                     'event': event_data
                 })
 
@@ -60,11 +63,15 @@ def sample_and_save_flow(flow_path, sample_map_path, output_path, rel_path, gt_i
 
     flow_data = flow_data.reshape(height, width, 2)
     sample_map = load_sample_map(sample_map_path, height, width)
-    sampled_flow = flow_data[sample_map].reshape(-1)
+    if data['contains_vis']:
+        sampled_flow = flow_data.reshape(-1)
+    else:
+        sampled_flow = flow_data[sample_map].reshape(-1)
 
     contains_vis = data['contains_vis']
     if contains_vis and gt_input:
-        rgb_data = data['rgb']
+        clean_data = data['clean']
+        final_data = data['final']
         event_data = data['event']
 
     # Prepare output data
@@ -83,7 +90,9 @@ def sample_and_save_flow(flow_path, sample_map_path, output_path, rel_path, gt_i
         sampled_flow.tofile(f)
 
         if contains_vis and gt_input:
-            rgb_data.tofile(f)
+            sample_map.tofile(f)
+            clean_data.tofile(f)
+            final_data.tofile(f)
             event_data.tofile(f)
 
 def load_sample_map(file_path, height, width):
@@ -110,24 +119,39 @@ def load_sample_map(file_path, height, width):
     return sample_map.reshape(height, width)
 
 def process_directory(flow_dir, sample_maps_dir, output_dir, gt_input):
+    pattern_list = []
+    if not gt_input:
+        # should be clean&final or event folder under flow_dir
+        list_content = os.listdir(flow_dir)
+        if len(list_content) == 2 and 'clean' in list_content and 'final' in list_content:
+            pattern_list = ['clean', 'final']
+        elif len(list_content) == 1 and 'event' in list_content:
+            pattern_list = ['event']
+        else:
+            raise ValueError(f"Invalid directory structure: {flow_dir}")
+    else:
+        pattern_list = ['']
+        
     flow_path = Path(flow_dir)
     sample_maps_path = Path(sample_maps_dir)
     output_path = Path(output_dir)
     
-    total_files = sum(1 for _ in flow_path.rglob('*.flo'))
-    for flo_path in tqdm.tqdm(flow_path.rglob('*.flo'), total=total_files):
-        # Get relative path
-        rel_path = flo_path.relative_to(flow_path)
-        
-        # Construct paths
-        sample_map_path = sample_maps_path / rel_path.with_suffix('.bin')
-        output_file = output_path / rel_path
-        
-        # Process the file
-        sample_and_save_flow(flo_path, sample_map_path, output_file, str(rel_path), gt_input)
+    total_files = sum(1 for _ in sample_maps_path.rglob('*.bin'))
+    for pattern in pattern_list:
+        for sample_map_path in tqdm.tqdm(sample_maps_path.rglob('*.bin'), total=total_files):
+            # Get relative path
+            rel_path = sample_map_path.relative_to(sample_maps_path)
+            
+            # Construct paths
+            flo_path = flow_path / pattern / rel_path.with_suffix('.flo')
+            output_file = output_path / pattern / rel_path.with_suffix('.flo')
+            
+            # Process the file
+            sample_and_save_flow(flo_path, sample_map_path, output_file, str(rel_path), gt_input)
 
     # if not gt_input, zip the output directory
     if not gt_input:
+        print(f'Zipping the output directory: {output_path}')
         zip_path = output_path
         shutil.make_archive(zip_path, 'zip', output_path)
 
