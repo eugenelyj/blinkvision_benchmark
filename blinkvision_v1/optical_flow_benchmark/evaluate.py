@@ -407,10 +407,14 @@ if __name__ == '__main__':
                             csvwriter.writerows(err_data)
 
                 if status_code == 'FAILURE':
-                    break
-
-            if status_code == 'FAILURE':
-                break
+                    # write json
+                    json_data = {
+                        'code': status_code,
+                        'error_msg': error_msg
+                    }
+                    with open(f'{args.output_path}/result.json', 'w') as f:
+                        json.dump(json_data, f, indent=4)
+                    exit()
 
             seq_metrics = {k: round(v, 3) for k, v in seq_metrics.get_value().items()}
 
@@ -448,7 +452,4 @@ if __name__ == '__main__':
     }
     with open(f'{args.output_path}/result.json', 'w') as f:
         json.dump(json_data, f, indent=4)
-
-    if status_code == 'FAILURE':
-        exit()
 
