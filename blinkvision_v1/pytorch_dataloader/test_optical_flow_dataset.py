@@ -5,8 +5,10 @@ import torch
 import os
 import yaml
 import imageio.v3 as iio
-from event_utils import VoxelGrid
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from torch.utils.data import Dataset, DataLoader
+from event_utils import VoxelGrid
 
 import os
 os.environ["OMP_NUM_THREADS"] = "1"  # noqa
@@ -85,21 +87,25 @@ class BlinkVisionFlow(Dataset):
             'seq': metadata['seq'],
         }
 
-        if self.config['clean']:
+        if 'clean' in self.config and self.config['clean']:
             clean_path = f'{folder_path}/clean_uint8'
             clean_img1 = iio.imread(f'{clean_path}/{start_idx:06d}.png')
             clean_img2 = iio.imread(f'{clean_path}/{end_idx:06d}.png')
+            clean_img1 = clean_img1.transpose(2, 0, 1)
+            clean_img2 = clean_img2.transpose(2, 0, 1)
             return_dict['clean_img1'] = clean_img1
             return_dict['clean_img2'] = clean_img2
 
-        if self.config['final']:
+        if 'final' in self.config and self.config['final']:
             final_path = f'{folder_path}/final_uint8'
             final_img1 = iio.imread(f'{final_path}/{start_idx:06d}.png')
             final_img2 = iio.imread(f'{final_path}/{end_idx:06d}.png')
+            final_img1 = final_img1.transpose(2, 0, 1)
+            final_img2 = final_img2.transpose(2, 0, 1)
             return_dict['final_img1'] = final_img1
             return_dict['final_img2'] = final_img2
 
-        if self.config['event']:
+        if 'event' in self.config and self.config['event']:
 
             event_path = f'{folder_path}/events_left/events.h5'
             time_window = [start_idx*self.step_ms, end_idx*self.step_ms]
@@ -118,6 +124,9 @@ class BlinkVisionFlow(Dataset):
                     continue
                 sidx = ms_to_idx[ts_start]
                 eidx = ms_to_idx[ts_end]
+                if sidx >= eidx:
+                    return_dict[names[i]] = None
+                    continue
                 t = hf['events/t'][sidx:eidx].astype(np.float32)
                 t = (t-np.min(t)) / (np.max(t)-np.min(t))
                 y = hf['events/y'][sidx:eidx].astype(np.float32)
@@ -131,6 +140,8 @@ class BlinkVisionFlow(Dataset):
 def collate_event(batch):
     ret = {}
     for key in ['event_volume_old', 'event_volume_new']:
+        if key not in batch[0]:
+            continue
         event_list = []
         batch_index_list = []
         for i in range(len(batch)):
@@ -150,12 +161,14 @@ def collate_event(batch):
         ret[key] = [item[key] for item in batch]
 
     for key in ['clean_img1', 'clean_img2', 'final_img1', 'final_img2']:
+        if key not in batch[0]:
+            continue
         ret[key] = torch.stack([torch.from_numpy(np.array(item[key], copy=True)) for item in batch], dim=0)
 
     return ret
 
 def event2voxel(batch, num_bins=15, height=480, width=640):
-    voxel_grid = VoxelGrid((num_bins, height, width), normalize=True, device='cuda', keep_shape=True)
+    voxel_grid = VoxelGrid((num_bins, height, width), normalize=True, device='cuda')
     if batch['event_volume_old'] is not None:
         event_old = batch['event_volume_old'].cuda()
         image1 = voxel_grid.convert({
@@ -168,14 +181,18 @@ def event2voxel(batch, num_bins=15, height=480, width=640):
     else:
         image1 = torch.zeros((num_bins, height, width)).cuda()
 
-    event_new = batch['event_volume_new'].cuda()
-    image2 = voxel_grid.convert({
-        'x': event_new[:,0],
-        'y': event_new[:,1],
-        't': event_new[:,2],
-        'p': event_new[:,3],
-        'batch_index': event_new[:,4].to(torch.long)
-    })
+    if batch['event_volume_new'] is not None:
+        event_new = batch['event_volume_new'].cuda()
+        image2 = voxel_grid.convert({
+            'x': event_new[:,0],
+            'y': event_new[:,1],
+            't': event_new[:,2],
+            'p': event_new[:,3],
+            'batch_index': event_new[:,4].to(torch.long)
+        })
+    else:
+        image2 = torch.zeros((num_bins, height, width)).cuda()
+
     return image1, image2
 
 
