@@ -68,6 +68,7 @@ class BlinkVisionFlow(Dataset):
                 'seq': seq,
             })
 
+
     def __len__(self):
         return len(self.metadata_list)
 
@@ -170,7 +171,7 @@ def collate_event(batch):
 def event2voxel(batch, num_bins=15, height=480, width=640):
     voxel_grid = VoxelGrid((num_bins, height, width), normalize=True, device='cuda')
     if batch['event_volume_old'] is not None:
-        event_old = batch['event_volume_old'].cuda()
+        event_old = batch['event_volume_old']
         image1 = voxel_grid.convert({
             'x': event_old[:,0],
             'y': event_old[:,1],
@@ -182,7 +183,7 @@ def event2voxel(batch, num_bins=15, height=480, width=640):
         image1 = torch.zeros((num_bins, height, width)).cuda()
 
     if batch['event_volume_new'] is not None:
-        event_new = batch['event_volume_new'].cuda()
+        event_new = batch['event_volume_new']
         image2 = voxel_grid.convert({
             'x': event_new[:,0],
             'y': event_new[:,1],
@@ -207,13 +208,13 @@ def test_dataflow():
     }
 
     dataset = BlinkVisionFlow(data_path=root, sample_map_path=sample_map_path, config=config)
-    train_loader = DataLoader(dataset,
+    test_loader = DataLoader(dataset,
                             batch_size=1,
                             shuffle=False,
-                            num_workers=0,
+                            num_workers=8,
                             collate_fn=collate_event,
                             drop_last=True)
-    for i, batch in enumerate(tqdm.tqdm(train_loader)):
+    for i, batch in enumerate(tqdm.tqdm(test_loader)):
         if i == 0:
             event_voxel_list = event2voxel(batch)
             print(batch['event_volume_new'].shape)
