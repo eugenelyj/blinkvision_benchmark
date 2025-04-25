@@ -29,8 +29,8 @@ The files under the `blinkflow_v1` directory:
 
 # The relationship between the folders and the benchmark
 
-1. flow_v1 benchmark: under blinkflow_v1/
-2. flow_v2 benchmark: under blinkvision_v1/optical_flow_benchmark/ and blinkvision_v1/pytorch_dataloader/
+1. flow_v1 benchmark: under `blinkflow_v1/`
+2. flow_v2 benchmark: under `blinkvision_v1/optical_flow_benchmark/` and `blinkvision_v1/pytorch_dataloader/`
 
 
 
