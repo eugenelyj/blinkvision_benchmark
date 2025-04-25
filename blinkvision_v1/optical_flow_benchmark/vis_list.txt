@@ -27,7 +27,6 @@ outdoor/outdoor_garden_tour_12/000100_000108.flo
 outdoor/outdoor_garden_tour_20/000080_000081.flo
 outdoor/outdoor_garden_05/000150_000151.flo
 indoor_people/AI48_003_people/000080_000082.flo
-indoor_tour/AI48_003_people/000180_000188.flo
 indoor_tour/AI33_010_280_people/000470_000472.flo
 outdoor/outdoor_crowd_05/000230_000232.flo
 outdoor/outdoor_drift_01/000270_000272.flo

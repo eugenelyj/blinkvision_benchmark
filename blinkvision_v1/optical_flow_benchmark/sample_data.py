@@ -37,7 +37,7 @@ def read_flo_file(file_path, relative_path, gt_input):
 
         contains_vis = False
         flow_relative_path = relative_path.split('.')[0] + '.flo'
-        if flow_relative_path in vis_list:
+        if flow_relative_path in vis_list or flow_relative_path.replace('outdoor_gt', 'outdoor') in vis_list:
             contains_vis = True
 
             if gt_input:

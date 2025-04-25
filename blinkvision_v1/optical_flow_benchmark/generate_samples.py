@@ -169,7 +169,7 @@ def process_directory(mapping_file, input_dir, output_dir):
 
         ground_truth_rel_path = os.path.join(rel_path, f'{basename}.flo')
         additional_data = None
-        if ground_truth_rel_path in vis_list:
+        if ground_truth_rel_path in vis_list or ground_truth_rel_path.replace('outdoor_gt', 'outdoor') in vis_list:
             # read rgb and event data
             event_data = h5py.File(event_path, 'r')
             event_stream = event_data['events']

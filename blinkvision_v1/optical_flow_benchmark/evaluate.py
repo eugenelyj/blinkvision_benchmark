@@ -405,7 +405,7 @@ if __name__ == '__main__':
                         error_map = visualize_error_map(pred_flow, gt_flow)
                         flow_vis = flow_to_image(pred_flow)
                         sample_map = gt_data['sample_map']
-                        flow_vis[~sample_map] = 0
+                        valid_mask = sample_map.astype(np.uint8) * 255
                         error_map[~sample_map] = 0
                         folder_name = f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}'
                         os.system(f'mkdir -p {folder_name}')
@@ -413,6 +413,7 @@ if __name__ == '__main__':
                             Image.fromarray(gt_data['clean']).save(f'{folder_name}/rgb.png')
                         else:
                             Image.fromarray(gt_data['final']).save(f'{folder_name}/rgb.png')
+                        Image.fromarray(valid_mask).save(f'{folder_name}/valid_mask.png')
                         Image.fromarray(gt_data['event']).save(f'{folder_name}/event.png')
                         Image.fromarray(flow_vis).save(f'{folder_name}/flow.png')
                         Image.fromarray(error_map).save(f'{folder_name}/error.png')
