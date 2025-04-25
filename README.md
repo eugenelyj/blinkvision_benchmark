@@ -1,6 +1,15 @@
-# BlinkFlow
+# BlinkVision benchmark scripts
 
-The related scripts are in the `blinkflow_v1` folder.
+This repository contains three types of scripts for the BlinkVision benchmark.
+
+1. pytorch dataloader
+2. submission scripts
+3. evaluation scripts
+
+Only the first two types of scripts are needed for the users. The third type of script is released for transparency.
+
+We takes the flow_v1 benchmark as an example to show the usage of the scripts.
+The related scripts are in the `blinkvision_v1` folder.
 
 To submit your results, you need the following steps:
 1. Run your results by referring to the `run_inference.py` script.
@@ -18,9 +27,11 @@ The files under the `blinkflow_v1` directory:
    - `event_viz.py`: Visualizes the events
 2. A `pytorch_dataloader` subdirectory containing dataset loader scripts
 
-# BlinkVision
+# The relationship between the folders and the benchmark
 
-The related scripts are in the `blinkvision_v1` folder.
+1. flow_v1 benchmark: under blinkflow_v1/
+2. flow_v2 benchmark: under blinkvision_v1/optical_flow_benchmark/ and blinkvision_v1/pytorch_dataloader/
+
 
 
 # Citation
