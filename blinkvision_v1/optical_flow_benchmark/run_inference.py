@@ -18,15 +18,6 @@ from pytorch_dataloader.test_optical_flow_dataset import collate_event, BlinkVis
 
 TAG_VALUE = 2502001 # full data
 
-import sys
-sys.path.append('core')
-
-from raft import RAFT
-from utils import flow_viz
-from utils.utils import InputPadder
-
-
-
 def load_model():
     # TODO: add your model here
     return None
