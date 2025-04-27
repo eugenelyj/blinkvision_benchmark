@@ -67,7 +67,7 @@ def main():
         raise ValueError("Either --all_keys or --key must be provided")
 
     repo_id = 'BlinkVision/BlinkVision_Train_PerSeq'
-    all_keys = ['depth', 'normals', 'forward_flow', 'backward_flow', 'poses']
+    all_keys = ['clean_uint8', 'final_uint8', 'depth', 'normals', 'forward_flow', 'backward_flow', 'poses']
 
     # Login to Hugging Face
     login_to_hf(args.token)
