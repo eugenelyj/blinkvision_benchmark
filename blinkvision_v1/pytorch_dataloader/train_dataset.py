@@ -9,7 +9,7 @@ import json
 import h5py
 import random
 from scipy.spatial.transform import Rotation as R
-from vis import make_video, visualize_optical_flow, visualize_depth, visualize_trajectory
+from vis import make_video, visualize_optical_flow, visualize_depth, visualize_trajectory, visualize_event
 
 blender2opencv = np.float32([[1, 0, 0, 0],
                              [0, -1, 0, 0],
@@ -57,7 +57,11 @@ class BlinkvisionDataset(torch.utils.data.Dataset):
             'indoor_train/AI58_008_tour',
         ]
 
-        with open(f'mapping_train.txt', 'r') as f:
+        current_file_path = os.path.abspath(__file__)
+        parent_directory = os.path.dirname(current_file_path)
+        mapping_file_path = os.path.join(parent_directory, 'mapping_train.txt')
+
+        with open(mapping_file_path, 'r') as f:
             lines = f.readlines()
             data = [line.strip('\n').split(', ') for line in lines]
             self.seq_list = []
@@ -73,6 +77,81 @@ class BlinkvisionDataset(torch.utils.data.Dataset):
                 self.used_scene_pattern = 'b'
             else:
                 raise ValueError(f'{self.root}/{self.seq_list[0][0]} or {self.root}/{self.seq_list[0][1]} does not exist')
+        
+        # there are two download links and have different name pattern
+        new_list = []
+        for (scene_pattern_a, scene_pattern_b, pose_need_rescaled) in self.seq_list:
+            if self.used_scene_pattern == 'a':
+                seq_dir = f'{self.root}/{scene_pattern_a}'
+                seq_name = scene_pattern_a.rsplit('/', 1)[1]
+            elif self.used_scene_pattern == 'b':
+                seq_dir = f'{self.root}/{scene_pattern_b}'
+                seq_name = scene_pattern_b.rsplit('/', 1)[1]
+            new_list.append([seq_dir, seq_name, pose_need_rescaled])
+        self.seq_list = new_list
+
+        # some seq does not have event data
+        new_list = []
+        if 'event' in self.config and self.config['event']:
+            for (seq_dir, seq_name, pose_need_rescaled) in self.seq_list:
+                event_seq_dir = seq_dir
+                event_seq_dir = event_seq_dir.replace('/indoor_train/', '/indoor_train_event_960/')
+                event_seq_dir = event_seq_dir.replace('/outdoor_train/', '/outdoor_train_event/')
+                if self.used_scene_pattern == 'a':
+                    event_file = f'{event_seq_dir}/events_left/events.h5'
+                else:
+                    event_file = f'{event_seq_dir}/events_left_resize960/events.h5'
+                if not os.path.exists(event_file):
+                    continue
+                new_list.append([seq_dir, seq_name, pose_need_rescaled])
+        self.seq_list = new_list
+
+        # TMP: filter out indoor seq
+        new_list = []
+        for (seq_dir, seq_name, pose_need_rescaled) in self.seq_list:
+            if 'indoor' not in seq_dir:
+                new_list.append([seq_dir, seq_name, pose_need_rescaled])
+        self.seq_list = new_list
+
+
+    def get_event(self, seq_dir):
+        if self.used_scene_pattern == 'a':
+            event_file = f'{seq_dir}/events_left/events.h5'
+        else:
+            event_file = f'{seq_dir}/events_left_resize960/events.h5'
+        if not os.path.exists(event_file):
+            return {
+                'event': None
+            }
+        try:
+            fps = 20
+            ms_interval = int(1000 / fps)
+            hf = h5py.File(event_file)
+            ms_to_idx = hf['ms_to_idx'][:]
+            event_list = []
+            for i in range(0, len(ms_to_idx), ms_interval):
+                ts_start = i
+                ts_end = min(i+ms_interval, len(ms_to_idx)-1)
+                sidx = ms_to_idx[ts_start]
+                eidx = ms_to_idx[ts_end]
+                t = hf['events/t'][sidx:eidx].astype(np.float32)
+                y = hf['events/y'][sidx:eidx].astype(np.float32)
+                x = hf['events/x'][sidx:eidx].astype(np.float32)
+                p = hf['events/p'][sidx:eidx].astype(np.float32)
+                events = np.stack([x, y, t, p], axis=1)
+                event_list.append(events)
+        except Exception as e:
+            print('#'*100)
+            print(f'Corrupted event file: {event_file}')
+            print('#'*100)
+            return {
+                'event': None
+            }
+                
+        return {
+            'event': event_list
+        }
+            
 
     def get_clean(self, seq_dir):
         clean_dir = f'{seq_dir}/clean_uint8'
@@ -204,19 +283,18 @@ class BlinkvisionDataset(torch.utils.data.Dataset):
         return len(self.seq_list)
 
     def __getitem__(self, index):
-        scene_pattern_a, scene_pattern_b, pose_need_rescaled = self.seq_list[index]
-        if self.used_scene_pattern == 'a':
-            seq_dir = f'{self.root}/{scene_pattern_a}'
-            seq_name = scene_pattern_a.rsplit('/', 1)[1]
-        elif self.used_scene_pattern == 'b':
-            seq_dir = f'{self.root}/{scene_pattern_b}'
-            seq_name = scene_pattern_b.rsplit('/', 1)[1]
-
+        seq_dir, seq_name, pose_need_rescaled = self.seq_list[index]
         # loop the dict in config, if the key is true, then call the corresponding function
         ret_dict = {'seq_name': seq_name}
         for key, value in self.config.items():
             if value:
-                sub_dict = getattr(self, f'get_{key}')(seq_dir)
+                if key == 'event':
+                    event_seq_dir = seq_dir
+                    event_seq_dir = event_seq_dir.replace('/indoor_train/', '/indoor_train_event_960/')
+                    event_seq_dir = event_seq_dir.replace('/outdoor_train/', '/outdoor_train_event/')
+                    sub_dict = getattr(self, f'get_{key}')(event_seq_dir)
+                else:
+                    sub_dict = getattr(self, f'get_{key}')(seq_dir)
                 ret_dict.update(sub_dict)
 
         if pose_need_rescaled and 'camera_pose' in ret_dict:
@@ -432,6 +510,28 @@ def render_3D(root_dir, save_dir):
         write_ply(points, color, path=f'{save_dir}/{seq_name}.ply')
         render_point_cloud(points, color, intrinsic, camera_pose_list[0])
 
+def render_event(root_dir, save_dir):
+    config = {
+        'event': True,
+        'clean': True,
+    }
+
+    dataset = BlinkvisionDataset(root=root_dir, config=config)
+    print(len(dataset))
+    for data in dataset:
+        seq_name = data['seq_name']
+        event_data_list = data['event']
+        clean_data_list = data['clean']
+
+        if event_data_list is None:
+            continue
+
+        print(seq_name)
+        height, width = clean_data_list[0].shape[:2]
+        vis_event_list = visualize_event(event_data_list, height, width)
+
+        data_list = [clean_data_list[:-1], vis_event_list]
+        make_video(data_list, outvid=f'{save_dir}/{seq_name}_event.mp4')
 
 
 if __name__ == '__main__':
@@ -450,4 +550,6 @@ if __name__ == '__main__':
         render_custom_stride(args.root_dir, args.save_dir)
     elif args.mode == 'render_3D':
         render_3D(args.root_dir, args.save_dir)
+    elif args.mode == 'render_event':
+        render_event(args.root_dir, args.save_dir)
 
