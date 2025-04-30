@@ -106,13 +106,6 @@ class BlinkvisionDataset(torch.utils.data.Dataset):
                 new_list.append([seq_dir, seq_name, pose_need_rescaled])
         self.seq_list = new_list
 
-        # TMP: filter out indoor seq
-        new_list = []
-        for (seq_dir, seq_name, pose_need_rescaled) in self.seq_list:
-            if 'indoor' not in seq_dir:
-                new_list.append([seq_dir, seq_name, pose_need_rescaled])
-        self.seq_list = new_list
-
 
     def get_event(self, seq_dir):
         if self.used_scene_pattern == 'a':
