@@ -91,8 +91,8 @@ class BlinkvisionDataset(torch.utils.data.Dataset):
         self.seq_list = new_list
 
         # some seq does not have event data
-        new_list = []
         if 'event' in self.config and self.config['event']:
+            new_list = []
             for (seq_dir, seq_name, pose_need_rescaled) in self.seq_list:
                 event_seq_dir = seq_dir
                 event_seq_dir = event_seq_dir.replace('/indoor_train/', '/indoor_train_event_960/')
@@ -104,8 +104,7 @@ class BlinkvisionDataset(torch.utils.data.Dataset):
                 if not os.path.exists(event_file):
                     continue
                 new_list.append([seq_dir, seq_name, pose_need_rescaled])
-        self.seq_list = new_list
-
+            self.seq_list = new_list
 
     def get_event(self, seq_dir):
         if self.used_scene_pattern == 'a':
@@ -480,6 +479,7 @@ def render_3D(root_dir, save_dir):
         'clean': True,
     }
     dataset = BlinkvisionDataset(root=root_dir, config=config)
+    print('dataset length', len(dataset))
     stride = 10
     for data in dataset:
         seq_name = data['seq_name']
