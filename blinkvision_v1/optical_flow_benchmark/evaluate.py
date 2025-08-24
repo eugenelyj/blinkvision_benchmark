@@ -353,9 +353,9 @@ if __name__ == '__main__':
             json.dump(json_data, f, indent=4)
         exit()
 
-    all_pixel_row = [['']+metric_name]
 
     for pattern in pattern_list:
+        all_pixel_row = [['']+metric_name]
         os.system(f'mkdir -p {args.output_path}/{pattern}')
         for scene in os.listdir(gt_path):
             seq_metrics = RunningAverageDict()

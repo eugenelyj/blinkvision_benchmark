@@ -109,6 +109,7 @@ def readDepth(fn, is_gt=False):
 def depth_to_image(depth):
     depth = depth.astype(np.float32)
     max_depth = np.percentile(depth, 99)
+    depth[depth > max_depth] = max_depth
     depth = (depth - np.min(depth)) / (max_depth - np.min(depth))
     depth = (depth * 255).astype(np.uint8)
     # colormap
@@ -271,16 +272,19 @@ if __name__ == '__main__':
                     if 'sample_map' in gt_data:
                         sample_map = gt_data['sample_map']
                         gt_larger_than_0 = gt_depth.reshape([480, 640]) > 1e-2
-                        valid = torch.from_numpy(sample_map).bool()
-                        valid = valid & gt_larger_than_0
+                        valid = sample_map.astype(np.bool_)
+                        valid = np.logical_and(valid, gt_larger_than_0)
                         valid_flat = valid.reshape(-1)
                     else:
-                        valid = torch.ones_like(torch.from_numpy(gt_depth), dtype=torch.bool)
+                        valid = np.ones_like(gt_depth, dtype=np.bool_)
                         gt_larger_than_0 = gt_depth > 1e-2
-                        valid = valid & gt_larger_than_0
+                        valid = np.logical_and(valid, gt_larger_than_0)
                         valid_flat = valid.reshape(-1)
                     # to avoid log(0)
                     pred_depth[pred_depth < 1e-6] = 1e-6
+                    # too close
+                    if np.sum(valid_flat) < 480 * 640 / 2:
+                        continue
                     error_dict = compute_errors(gt_depth[valid_flat], pred_depth[valid_flat])
                     all_a1 = error_dict['a1'] if 'a1' in error_dict else 0
                     all_rmse = error_dict['rmse'] if 'rmse' in error_dict else 0
@@ -296,10 +300,9 @@ if __name__ == '__main__':
                     if contains_vis:
                         pred_depth = np.reshape(pred_depth, [480, 640])
                         gt_depth = np.reshape(gt_depth, [480, 640])
-                        valid_np = valid.numpy()
-                        error_map = visualize_error_map(pred_depth, gt_depth, valid_np)
+                        error_map = visualize_error_map(pred_depth, gt_depth, valid)
                         depth_vis = depth_to_image(pred_depth)
-                        valid_mask = valid_np.astype(np.uint8) * 255
+                        valid_mask = valid.astype(np.uint8) * 255
                         folder_name = f'{args.output_path}/{pattern}/{scene}_{seq}_{file_name[:-4]}'
                         os.system(f'mkdir -p {folder_name}')
                         if pattern == 'clean' or pattern == 'event':
