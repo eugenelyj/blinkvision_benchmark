@@ -1,2 +1,5 @@
-wget -r ftp://ivp-db.ee.cuhk.edu.hk/hsli/BlinkFlow/test.zip
+modelscope download \
+  --dataset eugenelyj96/blinkflow \
+  --include "test/test.zip" \
+  --local_dir ./blinkflow
 unzip test.zip
